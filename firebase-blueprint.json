@@ -1,0 +1,159 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated user profile and language preference.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 160
+        },
+        "photoURL": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "preferredLanguage": {
+          "type": "string",
+          "enum": ["en", "km"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "displayName", "email", "preferredLanguage", "createdAt", "updatedAt"]
+    },
+    "Project": {
+      "title": "Project",
+      "description": "A document compilation project with formatting, numbering, header/footer, TOC, and watermark settings.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "folder": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "status": {
+          "type": "string",
+          "enum": ["draft", "compiled", "archived"]
+        },
+        "pageSetup": { "type": "object" },
+        "numberingConfig": { "type": "object" },
+        "headerFooterConfig": { "type": "object" },
+        "tocConfig": { "type": "object" },
+        "watermarkConfig": { "type": "object" },
+        "documentCount": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "id", "ownerId", "title", "folder", "status",
+        "pageSetup", "numberingConfig", "headerFooterConfig",
+        "tocConfig", "watermarkConfig", "documentCount",
+        "createdAt", "updatedAt"
+      ]
+    },
+    "ProjectDocument": {
+      "title": "ProjectDocument",
+      "description": "An imported or authored document section inside a compilation project.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "projectId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "sourceType": { "type": "string", "enum": ["editor", "docx", "doc", "pdf", "txt", "rtf", "image", "blank", "section-break"] },
+        "order": { "type": "integer" },
+        "selected": { "type": "boolean" },
+        "contentHtml": { "type": "string", "maxLength": 650000 },
+        "plainText": { "type": "string", "maxLength": 200000 },
+        "pageCountEstimate": { "type": "integer" },
+        "sectionRestartNumbering": { "type": "boolean" },
+        "sectionHeaderOverride": { "type": "string", "maxLength": 200 },
+        "sectionFooterOverride": { "type": "string", "maxLength": 200 },
+        "comments": { "type": "array" },
+        "bookmarks": { "type": "array" },
+        "signatureText": { "type": "string", "maxLength": 200 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "id", "projectId", "ownerId", "title", "sourceType",
+        "order", "selected", "contentHtml", "plainText",
+        "pageCountEstimate", "sectionRestartNumbering",
+        "createdAt", "updatedAt"
+      ]
+    },
+    "ProjectVersion": {
+      "title": "ProjectVersion",
+      "description": "Saved version snapshot of a project for recovery.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "projectId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "label": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "snapshotSummary": { "type": "string", "maxLength": 500 },
+        "documentsSnapshot": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "projectId", "ownerId", "label", "snapshotSummary", "documentsSnapshot", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Private user profile and interface preferences isolated per user."
+    },
+    "/projects/{projectId}": {
+      "schema": { "$ref": "#/entities/Project" },
+      "description": "Document compilation projects owned by authenticated users."
+    },
+    "/projects/{projectId}/documents/{docId}": {
+      "schema": { "$ref": "#/entities/ProjectDocument" },
+      "description": "Ordered document sections and imported files belonging to a project."
+    },
+    "/projects/{projectId}/versions/{versionId}": {
+      "schema": { "$ref": "#/entities/ProjectVersion" },
+      "description": "Saved revision snapshots for project recovery."
+    }
+  }
+}

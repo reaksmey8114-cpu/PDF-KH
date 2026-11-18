@@ -1,0 +1,274 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net (Default Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isEmailVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function parentProject(projectId) {
+      return get(/databases/$(database)/documents/projects/$(projectId));
+    }
+
+    function isProjectOwner(projectId) {
+      return isEmailVerified()
+        && exists(/databases/$(database)/documents/projects/$(projectId))
+        && parentProject(projectId).data.ownerId == request.auth.uid;
+    }
+
+    function isValidUser(data, userId) {
+      return data.keys().hasAll(['uid', 'displayName', 'email', 'preferredLanguage', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'displayName', 'email', 'photoURL', 'preferredLanguage', 'createdAt', 'updatedAt'])
+        && isValidId(data.uid)
+        && data.uid == userId
+        && data.uid == request.auth.uid
+        && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 120
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 160
+        && (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 500))
+        && data.preferredLanguage in ['en', 'km']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidProject(data, projectId) {
+      return data.keys().hasAll([
+          'id', 'ownerId', 'title', 'folder', 'status',
+          'pageSetup', 'numberingConfig', 'headerFooterConfig',
+          'tocConfig', 'watermarkConfig', 'documentCount',
+          'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'ownerId', 'title', 'description', 'folder', 'status',
+          'pageSetup', 'numberingConfig', 'headerFooterConfig',
+          'tocConfig', 'watermarkConfig', 'documentCount',
+          'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.id)
+        && data.id == projectId
+        && isValidId(data.ownerId)
+        && data.ownerId == request.auth.uid
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 200
+        && (!('description' in data) || (data.description is string && data.description.size() <= 1000))
+        && data.folder is string && data.folder.size() >= 1 && data.folder.size() <= 100
+        && data.status in ['draft', 'compiled', 'archived']
+        && data.pageSetup is map && data.pageSetup.size() <= 25
+        && data.numberingConfig is map && data.numberingConfig.size() <= 20
+        && data.headerFooterConfig is map && data.headerFooterConfig.size() <= 25
+        && data.tocConfig is map && data.tocConfig.size() <= 15
+        && data.watermarkConfig is map && data.watermarkConfig.size() <= 10
+        && data.documentCount is int && data.documentCount >= 0 && data.documentCount <= 500
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidProjectDocument(data, projectId, docId) {
+      return data.keys().hasAll([
+          'id', 'projectId', 'ownerId', 'title', 'sourceType',
+          'order', 'selected', 'contentHtml', 'plainText',
+          'pageCountEstimate', 'sectionRestartNumbering',
+          'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'projectId', 'ownerId', 'title', 'sourceType',
+          'order', 'selected', 'contentHtml', 'plainText',
+          'pageCountEstimate', 'sectionRestartNumbering',
+          'sectionHeaderOverride', 'sectionFooterOverride',
+          'comments', 'bookmarks', 'signatureText',
+          'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.id)
+        && data.id == docId
+        && isValidId(data.projectId)
+        && data.projectId == projectId
+        && isValidId(data.ownerId)
+        && data.ownerId == request.auth.uid
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 200
+        && data.sourceType in ['editor', 'docx', 'doc', 'pdf', 'txt', 'rtf', 'image', 'blank', 'section-break']
+        && data.order is int && data.order >= 0 && data.order <= 10000
+        && data.selected is bool
+        && data.contentHtml is string && data.contentHtml.size() <= 650000
+        && data.plainText is string && data.plainText.size() <= 200000
+        && data.pageCountEstimate is int && data.pageCountEstimate >= 1 && data.pageCountEstimate <= 5000
+        && data.sectionRestartNumbering is bool
+        && (!('sectionHeaderOverride' in data) || (data.sectionHeaderOverride is string && data.sectionHeaderOverride.size() <= 200))
+        && (!('sectionFooterOverride' in data) || (data.sectionFooterOverride is string && data.sectionFooterOverride.size() <= 200))
+        && (!('comments' in data) || (data.comments is list && data.comments.size() <= 50 && (data.comments.size() == 0 || data.comments[0] is map)))
+        && (!('bookmarks' in data) || (data.bookmarks is list && data.bookmarks.size() <= 50 && (data.bookmarks.size() == 0 || data.bookmarks[0] is map)))
+        && (!('signatureText' in data) || (data.signatureText is string && data.signatureText.size() <= 200))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidProjectVersion(data, projectId, versionId) {
+      return data.keys().hasAll([
+          'id', 'projectId', 'ownerId', 'label',
+          'snapshotSummary', 'documentsSnapshot', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'projectId', 'ownerId', 'label',
+          'snapshotSummary', 'documentsSnapshot', 'createdAt'
+        ])
+        && isValidId(data.id)
+        && data.id == versionId
+        && isValidId(data.projectId)
+        && data.projectId == projectId
+        && isValidId(data.ownerId)
+        && data.ownerId == request.auth.uid
+        && data.label is string && data.label.size() >= 1 && data.label.size() <= 160
+        && data.snapshotSummary is string && data.snapshotSummary.size() <= 500
+        && data.documentsSnapshot is list && data.documentsSnapshot.size() <= 40
+        && (data.documentsSnapshot.size() == 0 || data.documentsSnapshot[0] is map)
+        && data.createdAt is timestamp;
+    }
+
+    match /users/{userId} {
+      allow get: if isValidId(userId) && isOwner(userId);
+      allow list: if false;
+
+      allow create: if isValidId(userId)
+        && isEmailVerified()
+        && isOwner(userId)
+        && isValidUser(incoming(), userId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+
+      allow update: if isValidId(userId)
+        && isEmailVerified()
+        && isOwner(userId)
+        && isValidUser(incoming(), userId)
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'displayName', 'photoURL', 'preferredLanguage', 'updatedAt'
+        ]);
+
+      allow delete: if false;
+    }
+
+    match /projects/{projectId} {
+      allow get: if isValidId(projectId)
+        && isSignedIn()
+        && existing().ownerId == request.auth.uid;
+
+      allow list: if isSignedIn()
+        && resource.data.ownerId == request.auth.uid;
+
+      allow create: if isValidId(projectId)
+        && isEmailVerified()
+        && isValidProject(incoming(), projectId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+
+      allow update: if isValidId(projectId)
+        && isEmailVerified()
+        && existing().ownerId == request.auth.uid
+        && isValidProject(incoming(), projectId)
+        && incoming().ownerId == existing().ownerId
+        && incoming().id == existing().id
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          (incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']))
+          ||
+          (
+            existing().status != 'archived'
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'title', 'description', 'folder', 'status',
+              'pageSetup', 'numberingConfig', 'headerFooterConfig',
+              'tocConfig', 'watermarkConfig', 'documentCount', 'updatedAt'
+            ])
+          )
+        );
+
+      allow delete: if isValidId(projectId)
+        && isEmailVerified()
+        && existing().ownerId == request.auth.uid;
+
+      match /documents/{docId} {
+        allow get: if isValidId(projectId) && isValidId(docId)
+          && isSignedIn()
+          && isProjectOwner(projectId);
+
+        allow list: if isSignedIn()
+          && resource.data.ownerId == request.auth.uid;
+
+        allow create: if isValidId(projectId) && isValidId(docId)
+          && isProjectOwner(projectId)
+          && isValidProjectDocument(incoming(), projectId, docId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time;
+
+        allow update: if isValidId(projectId) && isValidId(docId)
+          && isProjectOwner(projectId)
+          && existing().ownerId == request.auth.uid
+          && isValidProjectDocument(incoming(), projectId, docId)
+          && incoming().id == existing().id
+          && incoming().projectId == existing().projectId
+          && incoming().ownerId == existing().ownerId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && (
+            incoming().diff(existing()).affectedKeys().hasOnly(['order', 'selected', 'updatedAt'])
+            ||
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'title', 'order', 'selected', 'contentHtml', 'plainText',
+              'pageCountEstimate', 'sectionRestartNumbering',
+              'sectionHeaderOverride', 'sectionFooterOverride',
+              'comments', 'bookmarks', 'signatureText', 'updatedAt'
+            ])
+          );
+
+        allow delete: if isValidId(projectId) && isValidId(docId)
+          && isProjectOwner(projectId)
+          && existing().ownerId == request.auth.uid;
+      }
+
+      match /versions/{versionId} {
+        allow get: if isValidId(projectId) && isValidId(versionId)
+          && isSignedIn()
+          && isProjectOwner(projectId);
+
+        allow list: if isSignedIn()
+          && resource.data.ownerId == request.auth.uid;
+
+        allow create: if isValidId(projectId) && isValidId(versionId)
+          && isProjectOwner(projectId)
+          && isValidProjectVersion(incoming(), projectId, versionId)
+          && incoming().createdAt == request.time;
+
+        allow update: if false;
+
+        allow delete: if isValidId(projectId) && isValidId(versionId)
+          && isProjectOwner(projectId)
+          && existing().ownerId == request.auth.uid;
+      }
+    }
+  }
+}
